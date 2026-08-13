@@ -82,6 +82,7 @@ export class MovieNight {
     const cycle = this.ensureCycle(config);
     await interaction.reply({ content: `Configured! The next watch party is <t:${Math.floor(DateTime.fromISO(cycle.event_at).toSeconds())}:F>. I’ll run nominations, voting, the announcement, and Scheduled Event automatically.`, ephemeral: true });
     if (role) await this.ensureRolePost(interaction.guild, config, channel);
+    if (cycle.phase === 'pending') await this.transition(config, cycle, 'nominations');
     await this.tickGuild(config);
   }
 
@@ -179,8 +180,11 @@ export class MovieNight {
     const cycle = this.ensureCycle(config);
     const movies = this.nominations(cycle.id);
     const when = `<t:${Math.floor(DateTime.fromISO(cycle.event_at).toSeconds())}:F>`;
+    const phaseCopy = cycle.phase === 'pending'
+      ? `Nominations open <t:${Math.floor(DateTime.fromISO(cycle.event_at).minus({ days: 6 }).toSeconds())}:F>.`
+      : PHASE_COPY[cycle.phase];
     return interaction.reply({ embeds: [new EmbedBuilder().setTitle('🍿 Movie Night')
-      .setDescription(`${PHASE_COPY[cycle.phase]}\n\n**Watch party:** ${when}\n**Nominations:** ${movies.length ? movies.map((m) => m.title).join(', ') : 'None yet'}`)
+      .setDescription(`${phaseCopy}\n\n**Watch party:** ${when}\n**Nominations:** ${movies.length ? movies.map((m) => m.title).join(', ') : 'None yet'}`)
       .setColor(0x9b59b6)], ephemeral: true });
   }
 

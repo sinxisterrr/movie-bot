@@ -12,6 +12,8 @@ A restart-safe Discord bot that runs a weekly movie night without routine admin 
 
 The weekly rhythm is intentionally simple: nominations open six days before the watch party, voting opens three days before it, and voting closes one day before it.
 
+Running setup opens the current pending cycle immediately, so a newly installed or reconfigured bot can be used at once. Later cycles follow the normal six-day schedule. While a future cycle is pending, `/movie status` shows the exact nomination-opening time.
+
 ## Run it
 
 Requirements: Node.js 22.5 or newer (the bot uses Node's built-in SQLite module).
