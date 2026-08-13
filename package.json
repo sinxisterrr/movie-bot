@@ -1,0 +1,17 @@
+{
+  "name": "movie-night-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "register": "node src/register-commands.js",
+    "test": "node --test",
+    "check": "node --check src/index.js && node --check src/movie-night.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.22.1",
+    "dotenv": "^17.2.1",
+    "luxon": "^3.7.2"
+  }
+}
