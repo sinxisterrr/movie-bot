@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node --experimental-sqlite src/index.js",
     "register": "node src/register-commands.js",
     "test": "node --test",
     "check": "node --check src/index.js && node --check src/movie-night.js"
