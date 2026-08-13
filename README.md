@@ -37,6 +37,7 @@ For development, `DISCORD_GUILD_ID` registers commands immediately in that serve
 
 ## Commands
 
+- `/pet` — give Marvin a head pat and receive a completely professional response.
 - `/movie suggest title` — nominate one movie during the nomination window.
 - `/movie status` — privately show the phase, date, and nominations.
 - `/movie-admin setup` — configure or update the automatic schedule.

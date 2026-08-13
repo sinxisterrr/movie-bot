@@ -2,6 +2,9 @@ import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from 'discord.j
 
 export const commands = [
   new SlashCommandBuilder()
+    .setName('pet')
+    .setDescription('Give Marvin the Movie Bot a head pat'),
+  new SlashCommandBuilder()
     .setName('movie')
     .setDescription('Join movie night')
     .addSubcommand((s) => s.setName('suggest').setDescription('Nominate a movie')

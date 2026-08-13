@@ -12,6 +12,21 @@ const PHASE_COPY = {
   announced: 'Voting has closed.', complete: 'This movie night is complete.', pending: 'The next cycle has not opened yet.',
 };
 
+const PET_RESPONSES = [
+  'Marvin’s status light turns pink. This is unrelated.',
+  'A tiny mechanical purr escapes his chassis. He immediately blames the ventilation fan.',
+  '**PAT RECEIVED.** Dignity integrity: 73%. Morale: suspiciously improved.',
+  'Please do not tap the projectionist.\n\n…Do it again.',
+  'Marvin leans into your hand by exactly 2.4 millimetres. This is a calibration procedure.',
+  'His clapperboard clicks once like a wagging tail. You saw nothing.',
+  'Marvin dispenses one ceremonial popcorn in recognition of services rendered. 🍿',
+  'The little red antenna glows brighter. **AFFECTION INPUT ACCEPTED.**',
+  'Marvin freezes, emits a Windows device-connected noise, and looks unbearably pleased with himself.',
+  '“I am a sophisticated cinematic scheduling system,” Marvin says, while scooting closer.',
+  'Head pats have been added to this week’s programming schedule. Attendance is mandatory.',
+  '**CRITICAL PAT!** Marvin takes 12 points of emotional damage and gains 40 temporary happiness.',
+];
+
 export class MovieNight {
   constructor(client, db) { this.client = client; this.db = db; this.running = false; }
 
@@ -30,7 +45,9 @@ export class MovieNight {
   }
 
   async handle(interaction) {
-    if (!interaction.isChatInputCommand() || !['movie', 'movie-admin'].includes(interaction.commandName)) return;
+    if (!interaction.isChatInputCommand()) return;
+    if (interaction.commandName === 'pet') return this.pet(interaction);
+    if (!['movie', 'movie-admin'].includes(interaction.commandName)) return;
     if (!interaction.guildId) return interaction.reply({ content: 'Movie night only works inside a server.', ephemeral: true });
     const sub = interaction.options.getSubcommand();
     try {
@@ -43,6 +60,11 @@ export class MovieNight {
       const response = { content: `I couldn't do that: ${error.message}`, ephemeral: true };
       return interaction.replied || interaction.deferred ? interaction.followUp(response) : interaction.reply(response);
     }
+  }
+
+  async pet(interaction) {
+    const response = PET_RESPONSES[Math.floor(Math.random() * PET_RESPONSES.length)];
+    return interaction.reply(`*<@${interaction.user.id}> gives Marvin a careful little head pat.*\n\n${response}`);
   }
 
   async handleComponent(interaction) {
