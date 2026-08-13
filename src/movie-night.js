@@ -46,6 +46,9 @@ export class MovieNight {
   }
 
   async handleComponent(interaction) {
+    if (interaction.isButton() && interaction.customId === 'movie-role-join') return this.setRole(interaction, true);
+    if (interaction.isButton() && interaction.customId === 'movie-role-leave') return this.setRole(interaction, false);
+    // Preserve compatibility with role posts created before explicit buttons existed.
     if (interaction.isButton() && interaction.customId === 'movie-role-toggle') return this.toggleRole(interaction);
     if (!interaction.isStringSelectMenu() || !interaction.customId.startsWith('movie-vote:')) return;
     const cycleId = Number(interaction.customId.split(':')[1]);
@@ -93,9 +96,10 @@ export class MovieNight {
       ? await channel.messages.fetch(config.role_message_id).catch(() => null)
       : null;
     const payload = {
-      content: `🍿 **Movie Night Crew**\nUse the button to join or leave ${role}. I’ll ping this role when nominations, voting, and the winning movie are announced.`,
+      content: `🍿 **Welcome to Movie Night!**\n\nClick **Join Movie Night** below to receive ${role} and get notified when nominations, voting, and the winner are posted.\n\n**Each week:**\n🎬 Nominate one movie with \`/movie suggest\`\n🗳️ Vote privately when the ballot opens\n🍿 I’ll announce the winner and create the watch-party event\n\nUse \`/movie status\` anytime to see the current phase and upcoming date. Use **Leave Movie Night** whenever you want to stop notifications.`,
       components: [new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId('movie-role-toggle').setLabel('Join / Leave Movie Night').setEmoji('🎬').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('movie-role-join').setLabel('Join Movie Night').setEmoji('🍿').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('movie-role-leave').setLabel('Leave Movie Night').setStyle(ButtonStyle.Secondary),
       )],
     };
     if (message) await message.edit(payload);
@@ -122,6 +126,27 @@ export class MovieNight {
     }
     await member.roles.add(role, 'Member joined Movie Night notifications');
     return interaction.reply({ content: `You’ve joined ${role}! 🍿`, ephemeral: true });
+  }
+
+  async setRole(interaction, shouldJoin) {
+    if (!interaction.guildId) return interaction.reply({ content: 'This button only works inside the server.', ephemeral: true });
+    const config = this.config(interaction.guildId);
+    if (!config?.role_id) return interaction.reply({ content: 'The Movie Night role is no longer configured.', ephemeral: true });
+    const role = await interaction.guild.roles.fetch(config.role_id).catch(() => null);
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    const me = interaction.guild.members.me ?? await interaction.guild.members.fetchMe();
+    if (!role || me.roles.highest.comparePositionTo(role) <= 0) {
+      return interaction.reply({ content: 'I can’t manage that role right now. An admin needs to check my role position.', ephemeral: true });
+    }
+    const hasRole = member.roles.cache.has(role.id);
+    if (shouldJoin && hasRole) return interaction.reply({ content: `You’re already in ${role}! 🍿`, ephemeral: true });
+    if (!shouldJoin && !hasRole) return interaction.reply({ content: `You’re not currently in ${role}.`, ephemeral: true });
+    if (shouldJoin) {
+      await member.roles.add(role, 'Member joined Movie Night notifications');
+      return interaction.reply({ content: `You’ve joined ${role}! 🍿`, ephemeral: true });
+    }
+    await member.roles.remove(role, 'Member left Movie Night notifications');
+    return interaction.reply({ content: `You’ve left ${role}.`, ephemeral: true });
   }
 
   async setPaused(interaction, paused) {
