@@ -2,7 +2,7 @@
 
 A restart-safe Discord bot that runs a weekly movie night without routine admin work:
 
-- opens one nomination per member;
+- accepts multiple nominations per member, up to the ballot-wide limit;
 - posts a private, changeable ballot;
 - randomly resolves ties and reports that it did so;
 - announces the winner;
@@ -38,7 +38,7 @@ For development, `DISCORD_GUILD_ID` registers commands immediately in that serve
 ## Commands
 
 - `/pet` — give Marvin a head pat and receive a completely professional response.
-- `/movie suggest title` — nominate one movie during the nomination window.
+- `/movie suggest title` — nominate a movie during the nomination window. Members may suggest multiple distinct movies until the 25-title ballot is full.
 - `/movie status` — privately show the phase, date, and nominations.
 - `/movie-admin setup` — configure or update the automatic schedule.
 - `/movie-admin pause` and `/movie-admin resume` — emergency controls.

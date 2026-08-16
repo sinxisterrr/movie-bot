@@ -34,5 +34,31 @@ export function openDatabase(filename) {
   if (!configColumns.includes('role_message_id')) {
     db.exec('ALTER TABLE guild_config ADD COLUMN role_message_id TEXT');
   }
+  migrateMultipleNominations(db);
   return db;
+}
+
+function migrateMultipleNominations(db) {
+  const hasPerUserUniqueIndex = db.prepare("PRAGMA index_list('nominations')").all().some((index) => {
+    if (!index.unique) return false;
+    const columns = db.prepare(`PRAGMA index_info('${index.name.replaceAll("'", "''")}')`).all().map((column) => column.name);
+    return columns.length === 2 && columns[0] === 'cycle_id' && columns[1] === 'user_id';
+  });
+  if (!hasPerUserUniqueIndex) return;
+
+  db.exec(`
+    PRAGMA foreign_keys = OFF;
+    BEGIN;
+    CREATE TABLE nominations_new (
+      id INTEGER PRIMARY KEY, cycle_id INTEGER NOT NULL REFERENCES cycles(id) ON DELETE CASCADE,
+      title TEXT NOT NULL COLLATE NOCASE, user_id TEXT NOT NULL,
+      UNIQUE(cycle_id, title)
+    );
+    INSERT INTO nominations_new (id, cycle_id, title, user_id)
+      SELECT id, cycle_id, title, user_id FROM nominations;
+    DROP TABLE nominations;
+    ALTER TABLE nominations_new RENAME TO nominations;
+    COMMIT;
+    PRAGMA foreign_keys = ON;
+  `);
 }

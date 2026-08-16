@@ -189,7 +189,6 @@ export class MovieNight {
     const title = interaction.options.getString('title', true).trim().replace(/\s+/g, ' ');
     try { this.db.prepare('INSERT INTO nominations (cycle_id, title, user_id) VALUES (?, ?, ?)').run(cycle.id, title, interaction.user.id); }
     catch (error) {
-      if (String(error).includes('cycle_id, user_id')) throw new Error('You already nominated a movie this week.');
       if (String(error).includes('cycle_id, title')) throw new Error('That movie has already been nominated.');
       throw error;
     }
