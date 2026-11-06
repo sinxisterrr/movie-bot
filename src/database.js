@@ -29,6 +29,21 @@ export function openDatabase(filename) {
       user_id TEXT NOT NULL, nomination_id INTEGER NOT NULL REFERENCES nominations(id) ON DELETE CASCADE,
       PRIMARY KEY(cycle_id, user_id)
     );
+    CREATE TABLE IF NOT EXISTS manager_config (
+      guild_id TEXT PRIMARY KEY, timezone TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS scheduled_jobs (
+      id INTEGER PRIMARY KEY, guild_id TEXT NOT NULL, channel_id TEXT NOT NULL,
+      creator_id TEXT NOT NULL, type TEXT NOT NULL, payload_json TEXT NOT NULL,
+      role_id TEXT, run_at TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL, executed_at TEXT, message_id TEXT, error TEXT
+    );
+    CREATE INDEX IF NOT EXISTS scheduled_jobs_due
+      ON scheduled_jobs(status, run_at);
+    CREATE TABLE IF NOT EXISTS marvin_responses (
+      id INTEGER PRIMARY KEY, guild_id TEXT NOT NULL, text TEXT NOT NULL,
+      created_by TEXT NOT NULL, created_at TEXT NOT NULL
+    );
   `);
   const configColumns = db.prepare('PRAGMA table_info(guild_config)').all().map((column) => column.name);
   if (!configColumns.includes('role_message_id')) {

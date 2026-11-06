@@ -63,7 +63,11 @@ export class MovieNight {
   }
 
   async pet(interaction) {
-    const response = PET_RESPONSES[Math.floor(Math.random() * PET_RESPONSES.length)];
+    const custom = interaction.guildId
+      ? this.db.prepare('SELECT text FROM marvin_responses WHERE guild_id = ?').all(interaction.guildId).map((row) => row.text)
+      : [];
+    const responses = [...PET_RESPONSES, ...custom];
+    const response = responses[Math.floor(Math.random() * responses.length)];
     return interaction.reply(`*<@${interaction.user.id}> gives Marvin a careful little head pat.*\n\n${response}`);
   }
 

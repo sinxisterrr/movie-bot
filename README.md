@@ -10,6 +10,8 @@ A restart-safe Discord bot that runs a weekly movie night without routine admin 
 - pins a self-service button that lets members join or leave the configured notification role;
 - advances missed deadlines safely after a restart.
 
+Marvin is also a restart-safe middle manager: administrators can schedule exact-Markdown announcements and native Discord polls in any permitted text or announcement channel, manage the queue, and add custom `/pet` responses without editing code.
+
 The weekly rhythm is intentionally simple: nominations open six days before the watch party, voting opens three days before it, and voting closes one day before it.
 
 Running setup opens the current pending cycle immediately, so a newly installed or reconfigured bot can be used at once. Later cycles follow the normal six-day schedule. While a future cycle is pending, `/movie status` shows the exact nomination-opening time.
@@ -19,7 +21,7 @@ Running setup opens the current pending cycle immediately, so a newly installed 
 Requirements: Node.js 22.5 or newer (the bot uses Node's built-in SQLite module).
 
 1. Create an application and bot in the [Discord Developer Portal](https://discord.com/developers/applications).
-2. On its installation page, grant the bot these permissions: View Channels, Send Messages, Read Message History, Create Events, Manage Roles, and Manage Messages. Move the bot's role above the Movie Night notification role, and mark that notification role as mentionable so the bot can ping it without the broad Mention Everyone permission.
+2. On its installation page, grant the bot these permissions: View Channels, Send Messages, Send Polls, Read Message History, Create Events, Manage Roles, and Manage Messages. Move the bot's role above the Movie Night notification role, and mark that notification role as mentionable so the bot can ping it without the broad Mention Everyone permission.
 3. Copy `.env.example` to `.env` and fill in the token, application/client ID, and development server ID.
 4. Install and register commands:
 
@@ -42,6 +44,21 @@ For development, `DISCORD_GUILD_ID` registers commands immediately in that serve
 - `/movie status` — privately show the phase, date, and nominations.
 - `/movie-admin setup` — configure or update the automatic schedule.
 - `/movie-admin pause` and `/movie-admin resume` — emergency controls.
+- `/manager setup timezone` — set the local timezone used by friendly dates such as `Nov 6 2026 9am`.
+- `/manager announce channel when role?` — open a multiline editor and schedule the exact Markdown body.
+- `/manager poll channel when duration multiple? role?` — schedule a native poll with 2–10 answers.
+- `/manager list` and `/manager cancel id` — inspect or cancel pending work.
+- `/manager response-add`, `/manager response-list`, and `/manager response-remove id` — manage custom `/pet` responses.
+
+For decorated polls, enter one answer per line. Put an emoji before a pipe when desired:
+
+```text
+🍄 | Mushrooms
+🌲 | The forest
+<:marvin:123456789> | Marvin decides
+```
+
+Announcements are stored and posted character-for-character, including line breaks and Discord Markdown. An optional selected role is added as a separate first-line mention. Discord's 2,000-character message limit still applies.
 
 Administrative commands require Discord's **Manage Server** permission. The same authorization is checked again when the command is handled.
 
