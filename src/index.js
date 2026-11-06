@@ -18,9 +18,16 @@ client.once(Events.ClientReady, async (ready) => {
   setInterval(() => manager.tick(), 10_000).unref();
 });
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (interaction.isChatInputCommand() && interaction.commandName === 'manager') await manager.handle(interaction);
-  else if (interaction.isModalSubmit() && interaction.customId.startsWith('manager:')) await manager.handleModal(interaction);
-  else if (interaction.isChatInputCommand()) await movieNight.handle(interaction);
-  else if (interaction.isMessageComponent()) await movieNight.handleComponent(interaction);
+  try {
+    if (interaction.isChatInputCommand() && interaction.commandName === 'manager') await manager.handle(interaction);
+    else if (interaction.isModalSubmit() && interaction.customId.startsWith('manager:')) await manager.handleModal(interaction);
+    else if (interaction.isChatInputCommand()) await movieNight.handle(interaction);
+    else if (interaction.isMessageComponent()) await movieNight.handleComponent(interaction);
+  } catch (error) {
+    console.error('Unhandled interaction error', error);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: 'Marvin dropped the paperwork. Please try again.', ephemeral: true }).catch(() => {});
+    }
+  }
 });
 client.login(process.env.DISCORD_TOKEN);

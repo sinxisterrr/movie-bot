@@ -24,14 +24,14 @@ export class Manager {
     }
     try {
       const sub = interaction.options.getSubcommand();
-      if (sub === 'setup') return this.setup(interaction);
-      if (sub === 'announce') return this.openAnnouncement(interaction);
-      if (sub === 'poll') return this.openPoll(interaction);
-      if (sub === 'list') return this.list(interaction);
-      if (sub === 'cancel') return this.cancel(interaction);
-      if (sub === 'response-add') return this.openResponse(interaction);
-      if (sub === 'response-list') return this.listResponses(interaction);
-      if (sub === 'response-remove') return this.removeResponse(interaction);
+      if (sub === 'setup') return await this.setup(interaction);
+      if (sub === 'announce') return await this.openAnnouncement(interaction);
+      if (sub === 'poll') return await this.openPoll(interaction);
+      if (sub === 'list') return await this.list(interaction);
+      if (sub === 'cancel') return await this.cancel(interaction);
+      if (sub === 'response-add') return await this.openResponse(interaction);
+      if (sub === 'response-list') return await this.listResponses(interaction);
+      if (sub === 'response-remove') return await this.removeResponse(interaction);
     } catch (error) {
       console.error(error);
       return this.replyError(interaction, error);
@@ -47,9 +47,9 @@ export class Manager {
         throw new Error('That form expired. Please run the command again.');
       }
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) throw new Error('You need Manage Server to do that.');
-      if (kind === 'announce') return this.saveAnnouncement(interaction, draft);
-      if (kind === 'poll') return this.savePoll(interaction, draft);
-      if (kind === 'response') return this.saveResponse(interaction);
+      if (kind === 'announce') return await this.saveAnnouncement(interaction, draft);
+      if (kind === 'poll') return await this.savePoll(interaction, draft);
+      if (kind === 'response') return await this.saveResponse(interaction);
       throw new Error('Unknown manager form.');
     } catch (error) {
       console.error(error);
@@ -265,7 +265,10 @@ export function parseScheduledTime(input, timezone, now = DateTime.now().setZone
     hour: start.get('hour'), minute: start.get('minute'), second: 0, millisecond: 0,
   }, { zone: timezone });
   if (!scheduled.isValid) throw new Error('That date or time is invalid.');
-  if (scheduled <= now) throw new Error('That time is in the past. Marvin’s authority does not extend to time travel.');
+  if (scheduled <= now) {
+    const timestamp = Math.floor(scheduled.toSeconds());
+    throw new Error(`I read that as <t:${timestamp}:F>, which is in the past. Try a future date or something like \`tomorrow 9am\`.`);
+  }
   return scheduled;
 }
 

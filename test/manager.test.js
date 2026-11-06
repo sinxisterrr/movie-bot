@@ -13,7 +13,28 @@ test('parses a friendly date in the configured local timezone', () => {
 
 test('rejects past manager dates', () => {
   const now = DateTime.fromISO('2026-11-05T12:00:00', { zone: 'America/Regina' });
-  assert.throws(() => parseScheduledTime('nov 4 2026 9am', 'America/Regina', now), /past/);
+  assert.throws(() => parseScheduledTime('nov 4 2026 9am', 'America/Regina', now), /which is in the past/);
+});
+
+test('reports invalid command times instead of leaving the interaction unanswered', async () => {
+  const db = openDatabase(':memory:');
+  db.prepare('INSERT INTO manager_config (guild_id, timezone) VALUES (?, ?)').run('guild', 'America/Regina');
+  const manager = new Manager({}, db);
+  let reply;
+  const interaction = {
+    inGuild: () => true,
+    guildId: 'guild', user: { id: 'admin' }, commandName: 'manager', replied: false, deferred: false,
+    memberPermissions: { has: () => true },
+    options: {
+      getSubcommand: () => 'announce', getChannel: () => ({ id: 'channel' }),
+      getString: () => 'January 1 2020 9am', getRole: () => null,
+    },
+    reply: async (value) => { reply = value; },
+  };
+  await manager.handle(interaction);
+  assert.match(reply.content, /which is in the past/);
+  assert.equal(reply.ephemeral, true);
+  db.close();
 });
 
 test('interprets relative dates from the configured timezone, not the host timezone', () => {
