@@ -21,7 +21,11 @@ const PET_RESPONSES = [
   'The little red antenna glows brighter. **AFFECTION INPUT ACCEPTED.**',
   'Marvin freezes, emits a Windows device-connected noise, and looks unbearably pleased with himself.',
   '**CRITICAL PAT!** Marvin takes 12 points of emotional damage and gains 40 temporary happiness.',
-
+  'Please do not tap the projectionist.\n\n…Do it again.',
+  'His clapperboard clicks once like a wagging tail. You saw nothing.',
+  'Marvin dispenses one ceremonial popcorn in recognition of services rendered. 🍿',
+  '“I am a sophisticated cinematic scheduling system,” Marvin says, while scooting closer.',
+  'Head pats have been added to this week’s programming schedule. Attendance is mandatory.',
   'Marvin adjusts his tie. “Physical affection is not outlined in the employee handbook.” He does not move away.',
   'Your head pat has been escalated to management. Management has approved additional head pats.',
   '**HR NOTICE:** Unscheduled affection has occurred. No disciplinary action will be taken.',
