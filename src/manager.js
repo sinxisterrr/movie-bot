@@ -1,13 +1,19 @@
 import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { basename, dirname, join, resolve } from 'node:path';
 import * as chrono from 'chrono-node';
 import {
-  ActionRowBuilder, ModalBuilder, PermissionFlagsBits, TextInputBuilder, TextInputStyle,
+  ActionRowBuilder, ChannelFlags, ChannelType, EmbedBuilder, ModalBuilder, PermissionFlagsBits,
+  TextInputBuilder, TextInputStyle,
 } from 'discord.js';
 import { DateTime, IANAZone } from 'luxon';
 
 const DISCORD_MESSAGE_LIMIT = 2000;
 const POLL_QUESTION_LIMIT = 300;
 const POLL_ANSWER_LIMIT = 55;
+const FORUM_TITLE_LIMIT = 100;
+const MAX_FORUM_TAGS = 5;
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
 export class Manager {
   constructor(client, db) {
@@ -15,6 +21,8 @@ export class Manager {
     this.db = db;
     this.drafts = new Map();
     this.running = false;
+    const databasePath = resolve(process.env.DATABASE_PATH ?? './data/movie-night.sqlite');
+    this.filesRoot = resolve(process.env.MANAGER_FILES_PATH ?? join(dirname(databasePath), 'manager-attachments'));
   }
 
   async handle(interaction) {
@@ -27,7 +35,9 @@ export class Manager {
       if (sub === 'setup') return await this.setup(interaction);
       if (sub === 'announce') return await this.openAnnouncement(interaction);
       if (sub === 'poll') return await this.openPoll(interaction);
+      if (sub === 'forum') return await this.openForum(interaction);
       if (sub === 'list') return await this.list(interaction);
+      if (sub === 'show') return await this.show(interaction);
       if (sub === 'cancel') return await this.cancel(interaction);
       if (sub === 'response-add') return await this.openResponse(interaction);
       if (sub === 'response-list') return await this.listResponses(interaction);
@@ -49,6 +59,7 @@ export class Manager {
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) throw new Error('You need Manage Server to do that.');
       if (kind === 'announce') return await this.saveAnnouncement(interaction, draft);
       if (kind === 'poll') return await this.savePoll(interaction, draft);
+      if (kind === 'forum') return await this.saveForum(interaction, draft);
       if (kind === 'response') return await this.saveResponse(interaction);
       throw new Error('Unknown manager form.');
     } catch (error) {
@@ -93,6 +104,42 @@ export class Manager {
       .setTitle('Schedule poll').addComponents(
         new ActionRowBuilder().addComponents(question),
         new ActionRowBuilder().addComponents(answers),
+      ));
+  }
+
+  async openForum(interaction) {
+    const draft = this.baseDraft(interaction);
+    draft.roleId = interaction.options.getRole('role')?.id ?? null;
+    draft.attachments = ['attachment-1', 'attachment-2', 'attachment-3', 'attachment-4']
+      .map((name) => interaction.options.getAttachment(name))
+      .filter(Boolean)
+      .map((attachment) => ({
+        name: attachment.name,
+        url: attachment.url,
+        size: attachment.size,
+        contentType: attachment.contentType ?? null,
+        description: attachment.description ?? null,
+      }));
+    for (const attachment of draft.attachments) {
+      if (attachment.size > MAX_ATTACHMENT_BYTES) {
+        throw new Error(`**${attachment.name}** exceeds Marvin’s 20 MB scheduled-file limit.`);
+      }
+    }
+    const token = this.storeDraft(draft);
+    const title = new TextInputBuilder().setCustomId('title').setLabel('Forum post title')
+      .setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(FORUM_TITLE_LIMIT);
+    const tags = new TextInputBuilder().setCustomId('tags').setLabel('Existing forum tags — comma separated')
+      .setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(300)
+      .setPlaceholder('Day One, Event, Featured');
+    const maxLength = DISCORD_MESSAGE_LIMIT - (draft.roleId ? `<@&${draft.roleId}>\n`.length : 0);
+    const body = new TextInputBuilder().setCustomId('body').setLabel('Exact opening-post Markdown')
+      .setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(maxLength)
+      .setPlaceholder('# Day One\nPaste the complete forum post exactly as it should appear.');
+    return interaction.showModal(new ModalBuilder().setCustomId(`manager:forum:${token}`)
+      .setTitle('Schedule forum post').addComponents(
+        new ActionRowBuilder().addComponents(title),
+        new ActionRowBuilder().addComponents(tags),
+        new ActionRowBuilder().addComponents(body),
       ));
   }
 
@@ -141,6 +188,40 @@ export class Manager {
     return this.confirmJob(interaction, id, draft, 'poll');
   }
 
+  async saveForum(interaction, draft) {
+    await interaction.deferReply({ ephemeral: true });
+    const channel = await interaction.guild.channels.fetch(draft.channelId);
+    if (!channel || ![ChannelType.GuildForum, ChannelType.GuildMedia].includes(channel.type)) {
+      throw new Error('The selected destination is no longer a forum or media channel.');
+    }
+    const title = interaction.fields.getTextInputValue('title').trim();
+    const body = interaction.fields.getTextInputValue('body');
+    const requestedTags = interaction.fields.getTextInputValue('tags');
+    const tags = resolveForumTags(channel.availableTags ?? [], requestedTags);
+    if (channel.flags?.has(ChannelFlags.RequireTag) && !tags.length) {
+      throw new Error('That forum requires at least one tag. Add an existing tag name and try again.');
+    }
+    const prefix = draft.roleId ? `<@&${draft.roleId}>\n` : '';
+    if ((prefix + body).length > DISCORD_MESSAGE_LIMIT) throw new Error('That opening post is too long for one Discord message.');
+
+    const payload = {
+      title,
+      body,
+      tagIds: tags.map((tag) => tag.id),
+      tagNames: tags.map((tag) => tag.name),
+      attachmentNames: draft.attachments.map((attachment) => attachment.name),
+    };
+    const id = this.insertJob(draft, 'forum', payload);
+    try {
+      await this.persistAttachments(id, draft.attachments);
+    } catch (error) {
+      this.db.prepare('DELETE FROM scheduled_jobs WHERE id = ?').run(id);
+      await this.cleanupFiles(id);
+      throw error;
+    }
+    return this.confirmJob(interaction, id, draft, 'forum post');
+  }
+
   saveResponse(interaction) {
     const text = interaction.fields.getTextInputValue('response').trim();
     const result = this.db.prepare(`INSERT INTO marvin_responses (guild_id, text, created_by, created_at)
@@ -160,10 +241,28 @@ export class Manager {
 
   confirmJob(interaction, id, draft, type) {
     const timestamp = Math.floor(DateTime.fromISO(draft.runAt).toSeconds());
-    return interaction.reply({
-      content: `📋 Scheduled ${type} **#${id}** for <#${draft.channelId}> at <t:${timestamp}:F> (<t:${timestamp}:R>).`,
-      ephemeral: true,
-    });
+    const response = { content: `📋 Scheduled ${type} **#${id}** for <#${draft.channelId}> at <t:${timestamp}:F> (<t:${timestamp}:R>).` };
+    return interaction.deferred ? interaction.editReply(response) : interaction.reply({ ...response, ephemeral: true });
+  }
+
+  async persistAttachments(jobId, attachments) {
+    if (!attachments.length) return;
+    const directory = join(this.filesRoot, String(jobId));
+    await mkdir(directory, { recursive: true });
+    for (const [index, attachment] of attachments.entries()) {
+      const response = await fetch(attachment.url);
+      if (!response.ok) throw new Error(`Marvin could not preserve **${attachment.name}** (${response.status}).`);
+      const buffer = Buffer.from(await response.arrayBuffer());
+      if (buffer.length > MAX_ATTACHMENT_BYTES) throw new Error(`**${attachment.name}** exceeds Marvin’s 20 MB scheduled-file limit.`);
+      const filename = safeFilename(attachment.name, index);
+      const storagePath = join(directory, `${index + 1}-${filename}`);
+      await writeFile(storagePath, buffer);
+      this.db.prepare(`INSERT INTO scheduled_job_files
+        (job_id, filename, storage_path, content_type, size, description)
+        VALUES (?, ?, ?, ?, ?, ?)`).run(
+        jobId, filename, storagePath, attachment.contentType, buffer.length, attachment.description,
+      );
+    }
   }
 
   list(interaction) {
@@ -174,14 +273,51 @@ export class Manager {
       const timestamp = Math.floor(DateTime.fromISO(job.run_at).toSeconds());
       return `**#${job.id}** · ${job.type} · <#${job.channel_id}> · <t:${timestamp}:F> · ${job.status}`;
     });
-    return interaction.reply({ content: `📋 **Upcoming work**\n${lines.join('\n')}`, ephemeral: true });
+    return interaction.reply({ content: `📋 **Upcoming work**\n${lines.join('\n')}\n\nUse \`/manager show id:<number>\` to inspect the complete scheduled content.`, ephemeral: true });
   }
 
-  cancel(interaction) {
+  async show(interaction) {
+    const id = interaction.options.getInteger('id', true);
+    const job = this.db.prepare('SELECT * FROM scheduled_jobs WHERE id = ? AND guild_id = ?').get(id, interaction.guildId);
+    if (!job) throw new Error(`Job #${id} was not found.`);
+    const payload = JSON.parse(job.payload_json);
+    const timestamp = Math.floor(DateTime.fromISO(job.run_at).toSeconds());
+    const files = this.db.prepare('SELECT filename, size FROM scheduled_job_files WHERE job_id = ? ORDER BY id').all(id);
+    const embed = new EmbedBuilder()
+      .setTitle(`📋 Job #${id} · ${job.type}`)
+      .setColor(job.status === 'failed' ? 0xe74c3c : job.status === 'cancelled' ? 0x7f8c8d : 0x9b59b6)
+      .addFields(
+        { name: 'Status', value: job.status, inline: true },
+        { name: 'Destination', value: `<#${job.channel_id}>`, inline: true },
+        { name: 'Scheduled', value: `<t:${timestamp}:F>\n<t:${timestamp}:R>`, inline: true },
+      );
+    if (job.role_id) embed.addFields({ name: 'Role mention', value: `<@&${job.role_id}>`, inline: true });
+    if (payload.title) embed.addFields({ name: 'Title', value: payload.title });
+    if (payload.tagNames?.length) embed.addFields({ name: 'Forum tags', value: payload.tagNames.join(', ') });
+    if (job.type === 'poll') {
+      embed.addFields({ name: 'Question', value: payload.question });
+      const answers = payload.answers.map((answer, index) => `${index + 1}. ${formatPollEmoji(answer.emoji)}${answer.text}`).join('\n');
+      embed.addFields({ name: 'Answers', value: answers });
+    }
+    const body = payload.body;
+    if (body) embed.setDescription(body);
+    const attachmentNames = files.length ? files : (payload.attachmentNames ?? []).map((filename) => ({ filename, size: null }));
+    if (attachmentNames.length) {
+      embed.addFields({
+        name: 'Attachments',
+        value: attachmentNames.map((file) => `• ${file.filename}${file.size == null ? '' : ` (${formatBytes(file.size)})`}`).join('\n'),
+      });
+    }
+    if (job.error) embed.addFields({ name: 'Error', value: truncate(job.error, 1000) });
+    return interaction.reply({ embeds: [embed], ephemeral: true });
+  }
+
+  async cancel(interaction) {
     const id = interaction.options.getInteger('id', true);
     const result = this.db.prepare(`UPDATE scheduled_jobs SET status = 'cancelled'
       WHERE id = ? AND guild_id = ? AND status = 'pending'`).run(id, interaction.guildId);
     if (!result.changes) throw new Error(`Pending job #${id} was not found.`);
+    await this.cleanupFiles(id);
     return interaction.reply({ content: `🗑️ Job **#${id}** has been removed from Marvin’s clipboard.`, ephemeral: true });
   }
 
@@ -221,14 +357,15 @@ export class Manager {
     if (!claimed.changes) return;
     try {
       const channel = await this.client.channels.fetch(job.channel_id);
-      if (!channel?.isTextBased()) throw new Error('The destination channel is unavailable or is not text-based.');
       const payload = JSON.parse(job.payload_json);
       const mention = job.role_id ? `<@&${job.role_id}>` : undefined;
       const allowedMentions = { parse: [], roles: job.role_id ? [job.role_id] : [], users: [] };
       let message;
       if (job.type === 'announcement') {
+        if (!channel?.isTextBased()) throw new Error('The destination channel is unavailable or is not text-based.');
         message = await channel.send({ content: mention ? `${mention}\n${payload.body}` : payload.body, allowedMentions });
       } else if (job.type === 'poll') {
+        if (!channel?.isTextBased()) throw new Error('The destination channel is unavailable or is not text-based.');
         message = await channel.send({
           content: mention,
           allowedMentions,
@@ -239,14 +376,41 @@ export class Manager {
             allowMultiselect: payload.multiple,
           },
         });
+      } else if (job.type === 'forum') {
+        if (!channel || ![ChannelType.GuildForum, ChannelType.GuildMedia].includes(channel.type)) {
+          throw new Error('The destination forum channel is unavailable.');
+        }
+        const fileRows = this.db.prepare('SELECT * FROM scheduled_job_files WHERE job_id = ? ORDER BY id').all(job.id);
+        const files = await Promise.all(fileRows.map(async (file) => ({
+          attachment: await readFile(file.storage_path),
+          name: file.filename,
+          description: file.description ?? undefined,
+        })));
+        message = await channel.threads.create({
+          name: payload.title,
+          appliedTags: payload.tagIds,
+          message: {
+            content: mention ? `${mention}\n${payload.body}` : payload.body,
+            allowedMentions,
+            files,
+          },
+          reason: `Scheduled by Marvin job #${job.id}`,
+        });
       } else throw new Error(`Unknown scheduled job type: ${job.type}`);
       this.db.prepare(`UPDATE scheduled_jobs SET status = 'completed', executed_at = ?, message_id = ?, error = NULL WHERE id = ?`)
         .run(DateTime.utc().toISO(), message.id, job.id);
+      await this.cleanupFiles(job.id);
     } catch (error) {
       console.error(`Scheduled job #${job.id} failed`, error);
       this.db.prepare("UPDATE scheduled_jobs SET status = 'failed', executed_at = ?, error = ? WHERE id = ?")
         .run(DateTime.utc().toISO(), String(error.message ?? error).slice(0, 1000), job.id);
     }
+  }
+
+  async cleanupFiles(jobId) {
+    const directory = join(this.filesRoot, String(jobId));
+    await rm(directory, { recursive: true, force: true });
+    this.db.prepare('DELETE FROM scheduled_job_files WHERE job_id = ?').run(jobId);
   }
 
   replyError(interaction, error) {
@@ -289,6 +453,37 @@ export function parsePollAnswers(input) {
     if (text.length > POLL_ANSWER_LIMIT) throw new Error(`Poll answer ${index + 1} exceeds ${POLL_ANSWER_LIMIT} characters.`);
     return emoji ? { text, emoji } : { text };
   });
+}
+
+export function resolveForumTags(availableTags, input) {
+  const names = input.split(/[,\n]/).map((name) => name.trim()).filter(Boolean);
+  const uniqueNames = [...new Map(names.map((name) => [name.toLocaleLowerCase(), name])).values()];
+  if (uniqueNames.length > MAX_FORUM_TAGS) throw new Error(`Forum posts can use at most ${MAX_FORUM_TAGS} tags.`);
+  return uniqueNames.map((requested) => {
+    const matches = availableTags.filter((tag) => tag.name.toLocaleLowerCase() === requested.toLocaleLowerCase());
+    if (!matches.length) {
+      const available = availableTags.map((tag) => tag.name).join(', ') || 'none';
+      throw new Error(`Forum tag **${requested}** does not exist. Available tags: ${available}.`);
+    }
+    if (matches.length > 1) throw new Error(`Forum tag **${requested}** is ambiguous because more than one tag has that name.`);
+    return matches[0];
+  });
+}
+
+function safeFilename(name, index) {
+  const cleaned = basename(name).replace(/[<>:"/\\|?*\x00-\x1F]/g, '_').trim();
+  return cleaned || `attachment-${index + 1}`;
+}
+
+function formatPollEmoji(emoji) {
+  if (!emoji) return '';
+  return emoji.id ? `<:${emoji.name}:${emoji.id}> ` : `${emoji.name} `;
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function truncate(text, length) {

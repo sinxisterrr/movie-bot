@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { DateTime } from 'luxon';
-import { parsePollAnswers, parseScheduledTime } from '../src/manager.js';
+import { ChannelType } from 'discord.js';
+import { parsePollAnswers, parseScheduledTime, resolveForumTags } from '../src/manager.js';
 import { openDatabase } from '../src/database.js';
 import { Manager } from '../src/manager.js';
 
@@ -54,6 +58,12 @@ test('requires between two and ten poll answers', () => {
   assert.throws(() => parsePollAnswers('Only one'), /between 2 and 10/);
 });
 
+test('matches forum tags case-insensitively and rejects missing tags', () => {
+  const available = [{ id: 'one', name: 'Day One' }, { id: 'event', name: 'Event' }];
+  assert.deepEqual(resolveForumTags(available, 'day one, EVENT'), available);
+  assert.throws(() => resolveForumTags(available, 'Missing'), /does not exist/);
+});
+
 test('executes an announcement with exact Markdown and only the selected role mention', async () => {
   const db = openDatabase(':memory:');
   let sent;
@@ -70,5 +80,39 @@ test('executes an announcement with exact Markdown and only the selected role me
   assert.equal(sent.content, `<@&role>\n${body}`);
   assert.deepEqual(sent.allowedMentions, { parse: [], roles: ['role'], users: [] });
   assert.equal(db.prepare('SELECT status FROM scheduled_jobs').get().status, 'completed');
+  db.close();
+});
+
+test('creates a tagged forum post with its cached attachment and cleans the cache', async () => {
+  const db = openDatabase(':memory:');
+  const root = await mkdtemp(join(tmpdir(), 'marvin-manager-'));
+  const jobDirectory = join(root, '1');
+  await mkdir(jobDirectory, { recursive: true });
+  const storagePath = join(jobDirectory, '1-cover.png');
+  await writeFile(storagePath, Buffer.from('pretend image'));
+  let created;
+  const channel = {
+    type: ChannelType.GuildForum,
+    threads: { create: async (payload) => { created = payload; return { id: 'thread-1' }; } },
+  };
+  const manager = new Manager({ channels: { fetch: async () => channel } }, db);
+  manager.filesRoot = root;
+  const job = db.prepare(`INSERT INTO scheduled_jobs
+    (guild_id, channel_id, creator_id, type, payload_json, role_id, run_at, status, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`).run(
+    'guild', 'forum', 'admin', 'forum', JSON.stringify({
+      title: 'Day One', body: '# Welcome', tagIds: ['tag-1'], tagNames: ['Event'], attachmentNames: ['cover.png'],
+    }), 'role', '2020-01-01T00:00:00.000Z', '2020-01-01T00:00:00.000Z',
+  );
+  db.prepare(`INSERT INTO scheduled_job_files
+    (job_id, filename, storage_path, content_type, size, description)
+    VALUES (?, ?, ?, ?, ?, ?)`).run(job.lastInsertRowid, 'cover.png', storagePath, 'image/png', 13, 'Cover');
+  await manager.tick();
+  assert.equal(created.name, 'Day One');
+  assert.deepEqual(created.appliedTags, ['tag-1']);
+  assert.equal(created.message.content, '<@&role>\n# Welcome');
+  assert.equal(created.message.files[0].name, 'cover.png');
+  assert.equal(db.prepare('SELECT status FROM scheduled_jobs').get().status, 'completed');
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM scheduled_job_files').get().count, 0);
   db.close();
 });

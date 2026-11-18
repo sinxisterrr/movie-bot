@@ -40,6 +40,11 @@ export function openDatabase(filename) {
     );
     CREATE INDEX IF NOT EXISTS scheduled_jobs_due
       ON scheduled_jobs(status, run_at);
+    CREATE TABLE IF NOT EXISTS scheduled_job_files (
+      id INTEGER PRIMARY KEY, job_id INTEGER NOT NULL REFERENCES scheduled_jobs(id) ON DELETE CASCADE,
+      filename TEXT NOT NULL, storage_path TEXT NOT NULL, content_type TEXT,
+      size INTEGER NOT NULL, description TEXT
+    );
     CREATE TABLE IF NOT EXISTS marvin_responses (
       id INTEGER PRIMARY KEY, guild_id TEXT NOT NULL, text TEXT NOT NULL,
       created_by TEXT NOT NULL, created_at TEXT NOT NULL

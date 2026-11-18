@@ -47,7 +47,8 @@ For development, `DISCORD_GUILD_ID` registers commands immediately in that serve
 - `/manager setup timezone` — set the local timezone used by friendly dates such as `Nov 6 2026 9am`.
 - `/manager announce channel when role?` — open a multiline editor and schedule the exact Markdown body.
 - `/manager poll channel when duration multiple? role?` — schedule a native poll with 2–10 answers.
-- `/manager list` and `/manager cancel id` — inspect or cancel pending work.
+- `/manager forum channel when role? attachment-1? attachment-2? attachment-3? attachment-4?` — schedule a forum post with a title, exact Markdown, existing tags, and persistent attachments.
+- `/manager list`, `/manager show id`, and `/manager cancel id` — list, privately preview, or cancel pending work.
 - `/manager response-add`, `/manager response-list`, and `/manager response-remove id` — manage custom `/pet` responses.
 
 For decorated polls, enter one answer per line. Put an emoji before a pipe when desired:
@@ -59,6 +60,8 @@ For decorated polls, enter one answer per line. Put an emoji before a pipe when 
 ```
 
 Announcements are stored and posted character-for-character, including line breaks and Discord Markdown. An optional selected role is added as a separate first-line mention. Discord's 2,000-character message limit still applies.
+
+Forum scheduling opens a modal for the post title, comma-separated existing tag names, and exact opening-post Markdown. Selected attachments are copied immediately into `manager-attachments` beside the SQLite database, survive redeployments through the same persistent volume, and are deleted after a successful post or cancellation. The first image becomes Discord's forum/gallery cover. Each scheduled attachment is limited to 20 MB.
 
 Administrative commands require Discord's **Manage Server** permission. The same authorization is checked again when the command is handled.
 
