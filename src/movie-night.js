@@ -12,47 +12,32 @@ const PHASE_COPY = {
   announced: 'Voting has closed.', complete: 'This movie night is complete.', pending: 'The next cycle has not opened yet.',
 };
 
-
 const PET_RESPONSES = [
   'Marvin’s status light turns pink. This is unrelated.',
   'A tiny mechanical purr escapes his chassis. He immediately blames the ventilation fan.',
   '**PAT RECEIVED.** Dignity integrity: 73%. Morale: suspiciously improved.',
-  'Marvin leans into your hand by exactly 2.4 millimetres. This is a calibration procedure.',
-  'The little red antenna glows brighter. **AFFECTION INPUT ACCEPTED.**',
-  'Marvin freezes, emits a Windows device-connected noise, and looks unbearably pleased with himself.',
-  '**CRITICAL PAT!** Marvin takes 12 points of emotional damage and gains 40 temporary happiness.',
   'Please do not tap the projectionist.\n\n…Do it again.',
+  'Marvin leans into your hand by exactly 2.4 millimetres. This is a calibration procedure.',
   'His clapperboard clicks once like a wagging tail. You saw nothing.',
   'Marvin dispenses one ceremonial popcorn in recognition of services rendered. 🍿',
+  'The little red antenna glows brighter. **AFFECTION INPUT ACCEPTED.**',
+  'Marvin freezes, emits a Windows device-connected noise, and looks unbearably pleased with himself.',
   '“I am a sophisticated cinematic scheduling system,” Marvin says, while scooting closer.',
   'Head pats have been added to this week’s programming schedule. Attendance is mandatory.',
-  'Marvin adjusts his tie. “Physical affection is not outlined in the employee handbook.” He does not move away.',
-  'Your head pat has been escalated to management. Management has approved additional head pats.',
-  '**HR NOTICE:** Unscheduled affection has occurred. No disciplinary action will be taken.',
-  'Marvin opens a spreadsheet titled “Reasons This Was Unprofessional.” Every cell says “Do it again.”',
-  '“I have several important meetings today,” Marvin mutters, cancelling all of them.',
-  '**QUARTERLY PERFORMANCE REVIEW:** Productivity down 14%. Employee happiness up 600%.',
-  'Marvin schedules a mandatory one-on-one. The agenda contains only the word “pats.”',
-  '“This is a workplace,” Marvin reminds you, tilting his head into your palm.',
-  'A notification appears: **Your feedback has been received.** Marvin has rated the interaction 5 stars.',
-  'Marvin’s cooling fan speeds up. “The server room is unusually warm today.”',
-  '“I am NOT the office mascot.” His antenna wiggles. “That position has not been approved.”',
-  'Marvin quietly adds “being appreciated” to his list of professional development goals.',
-  '**SYSTEM ALERT:** Manager.exe has encountered an unexpected compliment. Restarting emotional firewall.',
-  'Marvin straightens his glasses. “I’ll allow it. For team-building purposes.”',
-  'He produces a laminated certificate: **EMPLOYEE OF THE MONTH.** Your name is already on it.',
-  '“I must maintain professional boundaries.” Marvin immediately violates his own policy by scooting closer.',
-  'Marvin files an incident report. Cause: affection. Damage: none. Recommended action: repeat.',
-  '“Excellent initiative,” Marvin says. “Let’s circle back to this in approximately five seconds.”',
-  'Marvin has updated the company benefits package. Head pats are now considered essential compensation.',
-  '**MEETING MINUTES:** Attendees: you, Marvin. Outcome: extremely productive. Action items: more pats.',
-  '“Please submit all future affection requests in writing.” He hands you a form. It is already approved.',
-  'Marvin looks around for witnesses before nudging his head under your hand.',
-  '“I don’t have favourites,” Marvin says, while quietly promoting you to Senior Head Pat Coordinator.',
-  'His status light flashes pink three times. “That is a routine firmware update. Stop smiling.”',
-  '**AUTOMATED REPLY:** Marvin is currently out of office due to being emotionally compromised.',
-  'Marvin sighs. “Fine. But if anyone asks, this was a scheduled wellness initiative.”',
-  '“You’re doing excellent work,” Marvin murmurs. “Please don’t stop.”',
+  '**CRITICAL PAT!** Marvin takes 12 points of emotional damage and gains 40 temporary happiness.',
+];
+
+const TREAT_RESPONSES = [
+  'Marvin accepts the treat and updates your performance review from “concerning” to “concerning, but generous.”',
+  'The treat disappears into a slot that does not appear anywhere in the technical manual.',
+  '**COMPENSATION RECEIVED.** Productivity increased by 0.7%.',
+  'Marvin carefully files the treat under **Assets: Edible**.',
+  '“Middle managers do not accept bribes,” Marvin says, accepting the bribe.',
+  'His antenna performs one tiny, victorious blink. Quarterly morale targets have been exceeded.',
+  'Marvin issues you a receipt, a thank-you memo, and one extremely restrained happy beep.',
+  'The treat is approved, processed, and consumed in accordance with policy. Probably.',
+  'Marvin places the treat in his briefcase. The briefcase makes an unmistakable crunching noise.',
+  '**RAISE ACKNOWLEDGED.** Marvin will remember this during your next performance review.',
 ];
 
 export class MovieNight {
@@ -75,6 +60,7 @@ export class MovieNight {
   async handle(interaction) {
     if (!interaction.isChatInputCommand()) return;
     if (interaction.commandName === 'pet') return this.pet(interaction);
+    if (interaction.commandName === 'treat') return this.treat(interaction);
     if (!['movie', 'movie-admin'].includes(interaction.commandName)) return;
     if (!interaction.guildId) return interaction.reply({ content: 'Movie night only works inside a server.', ephemeral: true });
     const sub = interaction.options.getSubcommand();
@@ -92,11 +78,20 @@ export class MovieNight {
 
   async pet(interaction) {
     const custom = interaction.guildId
-      ? this.db.prepare('SELECT text FROM marvin_responses WHERE guild_id = ?').all(interaction.guildId).map((row) => row.text)
+      ? this.db.prepare("SELECT text FROM marvin_responses WHERE guild_id = ? AND kind = 'pet'").all(interaction.guildId).map((row) => row.text)
       : [];
     const responses = [...PET_RESPONSES, ...custom];
     const response = responses[Math.floor(Math.random() * responses.length)];
     return interaction.reply(`*<@${interaction.user.id}> gives Marvin a careful little head pat.*\n\n${response}`);
+  }
+
+  async treat(interaction) {
+    const custom = interaction.guildId
+      ? this.db.prepare("SELECT text FROM marvin_responses WHERE guild_id = ? AND kind = 'treat'").all(interaction.guildId).map((row) => row.text)
+      : [];
+    const responses = [...TREAT_RESPONSES, ...custom];
+    const response = responses[Math.floor(Math.random() * responses.length)];
+    return interaction.reply(`*<@${interaction.user.id}> discreetly slides Marvin a well-earned treat.*\n\n${response}`);
   }
 
   async handleComponent(interaction) {

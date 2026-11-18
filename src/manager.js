@@ -60,7 +60,7 @@ export class Manager {
       if (kind === 'announce') return await this.saveAnnouncement(interaction, draft);
       if (kind === 'poll') return await this.savePoll(interaction, draft);
       if (kind === 'forum') return await this.saveForum(interaction, draft);
-      if (kind === 'response') return await this.saveResponse(interaction);
+      if (kind === 'response') return await this.saveResponse(interaction, draft);
       throw new Error('Unknown manager form.');
     } catch (error) {
       console.error(error);
@@ -144,12 +144,13 @@ export class Manager {
   }
 
   async openResponse(interaction) {
-    const token = this.storeDraft({ guildId: interaction.guildId, userId: interaction.user.id, expiresAt: Date.now() + 15 * 60_000 });
-    const response = new TextInputBuilder().setCustomId('response').setLabel('New /pet response')
+    const kind = interaction.options.getString('kind', true);
+    const token = this.storeDraft({ guildId: interaction.guildId, userId: interaction.user.id, kind, expiresAt: Date.now() + 15 * 60_000 });
+    const response = new TextInputBuilder().setCustomId('response').setLabel(`New /${kind} response`)
       .setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(DISCORD_MESSAGE_LIMIT - 100)
       .setPlaceholder('Marvin’s tie spins once. This is a standard quarterly procedure.');
     return interaction.showModal(new ModalBuilder().setCustomId(`manager:response:${token}`)
-      .setTitle('Teach Marvin a response').addComponents(new ActionRowBuilder().addComponents(response)));
+      .setTitle(`Teach Marvin a /${kind} response`).addComponents(new ActionRowBuilder().addComponents(response)));
   }
 
   baseDraft(interaction) {
@@ -222,11 +223,11 @@ export class Manager {
     return this.confirmJob(interaction, id, draft, 'forum post');
   }
 
-  saveResponse(interaction) {
+  saveResponse(interaction, draft) {
     const text = interaction.fields.getTextInputValue('response').trim();
-    const result = this.db.prepare(`INSERT INTO marvin_responses (guild_id, text, created_by, created_at)
-      VALUES (?, ?, ?, ?)`).run(interaction.guildId, text, interaction.user.id, DateTime.utc().toISO());
-    return interaction.reply({ content: `🤖 Response **#${result.lastInsertRowid}** added to Marvin’s approved head-pat procedures.`, ephemeral: true });
+    const result = this.db.prepare(`INSERT INTO marvin_responses (guild_id, text, created_by, created_at, kind)
+      VALUES (?, ?, ?, ?, ?)`).run(interaction.guildId, text, interaction.user.id, DateTime.utc().toISO(), draft.kind);
+    return interaction.reply({ content: `🤖 Response **#${result.lastInsertRowid}** added to Marvin’s approved /${draft.kind} procedures.`, ephemeral: true });
   }
 
   insertJob(draft, type, payload) {
@@ -322,10 +323,13 @@ export class Manager {
   }
 
   listResponses(interaction) {
-    const responses = this.db.prepare('SELECT id, text FROM marvin_responses WHERE guild_id = ? ORDER BY id LIMIT 20').all(interaction.guildId);
+    const kind = interaction.options.getString('kind');
+    const responses = kind
+      ? this.db.prepare('SELECT id, text, kind FROM marvin_responses WHERE guild_id = ? AND kind = ? ORDER BY id LIMIT 20').all(interaction.guildId, kind)
+      : this.db.prepare('SELECT id, text, kind FROM marvin_responses WHERE guild_id = ? ORDER BY id LIMIT 20').all(interaction.guildId);
     if (!responses.length) return interaction.reply({ content: 'Marvin has no custom responses yet; only his factory-installed dignity problems.', ephemeral: true });
-    const lines = responses.map((row) => `**#${row.id}** ${truncate(row.text.replaceAll('\n', ' '), 120)}`);
-    return interaction.reply({ content: `🤖 **Custom /pet responses**\n${lines.join('\n')}`, ephemeral: true });
+    const lines = responses.map((row) => `**#${row.id}** · /${row.kind} · ${truncate(row.text.replaceAll('\n', ' '), 120)}`);
+    return interaction.reply({ content: `🤖 **Custom Marvin responses**\n${lines.join('\n')}`, ephemeral: true });
   }
 
   removeResponse(interaction) {

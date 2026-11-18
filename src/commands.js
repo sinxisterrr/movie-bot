@@ -5,6 +5,9 @@ export const commands = [
     .setName('pet')
     .setDescription('Give Marvin the Movie Bot a head pat'),
   new SlashCommandBuilder()
+    .setName('treat')
+    .setDescription('Give Marvin the Middle Manager a well-earned treat'),
+  new SlashCommandBuilder()
     .setName('movie')
     .setDescription('Join movie night')
     .addSubcommand((s) => s.setName('suggest').setDescription('Nominate a movie')
@@ -60,8 +63,12 @@ export const commands = [
       .addIntegerOption((o) => o.setName('id').setDescription('Job ID from /manager list').setRequired(true).setMinValue(1)))
     .addSubcommand((s) => s.setName('cancel').setDescription('Cancel a pending scheduled job')
       .addIntegerOption((o) => o.setName('id').setDescription('Job ID from /manager list').setRequired(true).setMinValue(1)))
-    .addSubcommand((s) => s.setName('response-add').setDescription('Add a custom Marvin /pet response'))
-    .addSubcommand((s) => s.setName('response-list').setDescription('List custom Marvin /pet responses'))
+    .addSubcommand((s) => s.setName('response-add').setDescription('Add a custom Marvin response')
+      .addStringOption((o) => o.setName('kind').setDescription('Which command uses this response').setRequired(true)
+        .addChoices({ name: '/pet', value: 'pet' }, { name: '/treat', value: 'treat' })))
+    .addSubcommand((s) => s.setName('response-list').setDescription('List custom Marvin responses')
+      .addStringOption((o) => o.setName('kind').setDescription('Optionally show only one response type')
+        .addChoices({ name: '/pet', value: 'pet' }, { name: '/treat', value: 'treat' })))
     .addSubcommand((s) => s.setName('response-remove').setDescription('Remove a custom Marvin /pet response')
       .addIntegerOption((o) => o.setName('id').setDescription('Response ID from /manager response-list').setRequired(true).setMinValue(1))),
 ].map((command) => command.toJSON());

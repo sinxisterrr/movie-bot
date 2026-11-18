@@ -40,6 +40,7 @@ For development, `DISCORD_GUILD_ID` registers commands immediately in that serve
 ## Commands
 
 - `/pet` — give Marvin a head pat and receive a completely professional response.
+- `/treat` — compensate Marvin for his expanding portfolio of responsibilities.
 - `/movie suggest title` — nominate a movie during the nomination window. Members may suggest multiple distinct movies until the 25-title ballot is full.
 - `/movie status` — privately show the phase, date, and nominations.
 - `/movie-admin setup` — configure or update the automatic schedule.
@@ -49,7 +50,7 @@ For development, `DISCORD_GUILD_ID` registers commands immediately in that serve
 - `/manager poll channel when duration multiple? role?` — schedule a native poll with 2–10 answers.
 - `/manager forum channel when role? attachment-1? attachment-2? attachment-3? attachment-4?` — schedule a forum post with a title, exact Markdown, existing tags, and persistent attachments.
 - `/manager list`, `/manager show id`, and `/manager cancel id` — list, privately preview, or cancel pending work.
-- `/manager response-add`, `/manager response-list`, and `/manager response-remove id` — manage custom `/pet` responses.
+- `/manager response-add kind`, `/manager response-list kind?`, and `/manager response-remove id` — manage custom `/pet` and `/treat` responses.
 
 For decorated polls, enter one answer per line. Put an emoji before a pipe when desired:
 

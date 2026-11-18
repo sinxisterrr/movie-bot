@@ -47,12 +47,17 @@ export function openDatabase(filename) {
     );
     CREATE TABLE IF NOT EXISTS marvin_responses (
       id INTEGER PRIMARY KEY, guild_id TEXT NOT NULL, text TEXT NOT NULL,
-      created_by TEXT NOT NULL, created_at TEXT NOT NULL
+      created_by TEXT NOT NULL, created_at TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'pet'
     );
   `);
   const configColumns = db.prepare('PRAGMA table_info(guild_config)').all().map((column) => column.name);
   if (!configColumns.includes('role_message_id')) {
     db.exec('ALTER TABLE guild_config ADD COLUMN role_message_id TEXT');
+  }
+  const responseColumns = db.prepare('PRAGMA table_info(marvin_responses)').all().map((column) => column.name);
+  if (!responseColumns.includes('kind')) {
+    db.exec("ALTER TABLE marvin_responses ADD COLUMN kind TEXT NOT NULL DEFAULT 'pet'");
   }
   migrateMultipleNominations(db);
   return db;

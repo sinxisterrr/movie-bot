@@ -13,3 +13,17 @@ test('allows multiple distinct nominations from the same member', () => {
   assert.throws(() => insert.run(cycle.id, 'alien', 'someone-else'));
   db.close();
 });
+
+test('stores separate custom response types while defaulting legacy rows to pet', () => {
+  const db = openDatabase(':memory:');
+  db.prepare(`INSERT INTO marvin_responses (guild_id, text, created_by, created_at)
+    VALUES ('guild', 'legacy response', 'admin', '2026-11-18T00:00:00Z')`).run();
+  db.prepare(`INSERT INTO marvin_responses (guild_id, text, created_by, created_at, kind)
+    VALUES ('guild', 'treat response', 'admin', '2026-11-18T00:00:00Z', 'treat')`).run();
+  const rows = db.prepare('SELECT text, kind FROM marvin_responses ORDER BY id').all().map((row) => ({ ...row }));
+  assert.deepEqual(rows, [
+    { text: 'legacy response', kind: 'pet' },
+    { text: 'treat response', kind: 'treat' },
+  ]);
+  db.close();
+});
