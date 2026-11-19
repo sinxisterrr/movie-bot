@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "stampsPerVolume": 12,
+  "volumes": [
+    {
+      "volume": 1,
+      "tier": "Citizen",
+      "stampStart": 1,
+      "stampEnd": 12,
+      "template": "volume-1-template.png",
+      "width": 1536,
+      "height": 1024,
+      "status": "awaiting-layout-map"
+    },
+    {
+      "volume": 2,
+      "tier": "Resident",
+      "stampStart": 13,
+      "stampEnd": 24,
+      "template": "volume-2-template.png",
+      "width": 1536,
+      "height": 1024,
+      "status": "awaiting-layout-map"
+    },
+    {
+      "volume": 3,
+      "tier": "Veteran",
+      "stampStart": 25,
+      "stampEnd": 36,
+      "template": "volume-3-template.png",
+      "width": 1536,
+      "height": 1024,
+      "status": "awaiting-layout-map"
+    },
+    {
+      "volume": 4,
+      "tier": "Luminary",
+      "stampStart": 37,
+      "stampEnd": 48,
+      "template": "volume-4-template.png",
+      "width": 1536,
+      "height": 1024,
+      "status": "awaiting-layout-map"
+    },
+    {
+      "volume": 5,
+      "tier": "Legend",
+      "stampStart": 49,
+      "stampEnd": 60,
+      "template": "volume-5-template.png",
+      "width": 1536,
+      "height": 1024,
+      "status": "awaiting-layout-map"
+    }
+  ]
+}
