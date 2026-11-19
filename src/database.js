@@ -50,6 +50,27 @@ export function openDatabase(filename) {
       created_by TEXT NOT NULL, created_at TEXT NOT NULL,
       kind TEXT NOT NULL DEFAULT 'pet'
     );
+    CREATE TABLE IF NOT EXISTS passport_events (
+      id INTEGER PRIMARY KEY, guild_id TEXT NOT NULL, role_id TEXT NOT NULL,
+      name TEXT NOT NULL, stamp_path TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1,
+      created_by TEXT NOT NULL, created_at TEXT NOT NULL,
+      UNIQUE(guild_id, role_id)
+    );
+    CREATE TABLE IF NOT EXISTS passport_stamps (
+      id INTEGER PRIMARY KEY, guild_id TEXT NOT NULL, user_id TEXT NOT NULL,
+      event_id INTEGER NOT NULL REFERENCES passport_events(id), awarded_at TEXT NOT NULL,
+      UNIQUE(guild_id, user_id, event_id)
+    );
+    CREATE INDEX IF NOT EXISTS passport_stamps_member
+      ON passport_stamps(guild_id, user_id, awarded_at, id);
+    CREATE TABLE IF NOT EXISTS passport_milestones (
+      guild_id TEXT NOT NULL, user_id TEXT NOT NULL, threshold INTEGER NOT NULL,
+      reached_at TEXT NOT NULL, PRIMARY KEY(guild_id, user_id, threshold)
+    );
+    CREATE TABLE IF NOT EXISTS passport_pending_notices (
+      id INTEGER PRIMARY KEY, guild_id TEXT NOT NULL, user_id TEXT NOT NULL,
+      message TEXT NOT NULL, created_at TEXT NOT NULL
+    );
   `);
   const configColumns = db.prepare('PRAGMA table_info(guild_config)').all().map((column) => column.name);
   if (!configColumns.includes('role_message_id')) {
