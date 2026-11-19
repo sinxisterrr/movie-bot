@@ -10,7 +10,7 @@
       "template": "volume-1-template.png",
       "width": 1536,
       "height": 1024,
-      "status": "awaiting-layout-map"
+      "status": "ready-for-layout-map"
     },
     {
       "volume": 2,
@@ -20,7 +20,7 @@
       "template": "volume-2-template.png",
       "width": 1536,
       "height": 1024,
-      "status": "awaiting-layout-map"
+      "status": "ready-for-layout-map"
     },
     {
       "volume": 3,
@@ -30,7 +30,7 @@
       "template": "volume-3-template.png",
       "width": 1536,
       "height": 1024,
-      "status": "awaiting-layout-map"
+      "status": "ready-for-layout-map"
     },
     {
       "volume": 4,
@@ -40,7 +40,7 @@
       "template": "volume-4-template.png",
       "width": 1536,
       "height": 1024,
-      "status": "awaiting-layout-map"
+      "status": "ready-for-layout-map"
     },
     {
       "volume": 5,
@@ -50,7 +50,7 @@
       "template": "volume-5-template.png",
       "width": 1536,
       "height": 1024,
-      "status": "awaiting-layout-map"
+      "status": "ready-for-layout-map"
     }
   ]
 }
