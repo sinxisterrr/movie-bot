@@ -42,7 +42,7 @@ test('renders a private passport PNG at the template dimensions', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"><rect width="512" height="512" fill="#8040c0"/></svg>`));
   try {
-    const member = { id: 'member', displayName: 'Test Citizen', displayAvatarURL: () => 'https://avatar.invalid/test.png' };
+    const member = { id: 'member', displayName: '𝕿𝖊𝖘𝖙 𝕮𝖎𝖙𝖎𝖟𝖊𝖓', displayAvatarURL: () => 'https://avatar.invalid/test.png' };
     const output = await passport.render(member, [], 1);
     const metadata = await sharp(output).metadata();
     assert.equal(metadata.width, 1536);

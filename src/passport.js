@@ -7,6 +7,7 @@ import sharp from 'sharp';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATE_ROOT = resolve(__dirname, '../assets/passport');
+const NAME_FONT = resolve(__dirname, '../assets/fonts/NotoSansMath-Regular.ttf');
 const MAX_STAMP_BYTES = 8 * 1024 * 1024;
 const MILESTONES = new Set([3, 6, 12, 24, 36, 48, 60]);
 const SLOT_CENTERS = [
@@ -203,7 +204,23 @@ export class Passport {
       const metadata = await sharp(art).metadata();
       composites.push({ input: art, left: Math.round(SLOT_CENTERS[index][0] - metadata.width / 2), top: Math.round(SLOT_CENTERS[index][1] - metadata.height / 2) });
     }
-    composites.push({ input: nameplateSvg(member.displayName), left: 181, top: 614 });
+    composites.push({ input: nameplateSvg(), left: 181, top: 614 });
+    composites.push({
+      input: {
+        text: {
+          text: `<span foreground="#ffe3a0" weight="bold">${escapeXml(truncateName(member.displayName))}</span>`,
+          font: 'Noto Sans Math',
+          fontfile: NAME_FONT,
+          width: 320,
+          height: 38,
+          align: 'centre',
+          rgba: true,
+          wrap: 'none',
+        },
+      },
+      left: 192,
+      top: 622,
+    });
     return sharp({ create: { width: 1536, height: 1024, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
       .composite(composites).png().toBuffer();
   }
@@ -264,12 +281,14 @@ function roman(number) {
   return ['I', 'II', 'III', 'IV', 'V'][number - 1];
 }
 
-function nameplateSvg(name) {
-  const safe = escapeXml(name.length > 24 ? `${name.slice(0, 23)}…` : name);
+function nameplateSvg() {
   return Buffer.from(`<svg width="342" height="54" xmlns="http://www.w3.org/2000/svg">
     <rect x="1" y="1" width="340" height="52" rx="22" fill="#120b15" fill-opacity="0.82" stroke="#f0b948" stroke-width="2"/>
-    <text x="171" y="35" text-anchor="middle" font-family="Georgia,serif" font-size="25" font-weight="700" fill="#ffe3a0">${safe}</text>
   </svg>`);
+}
+
+function truncateName(name) {
+  return Array.from(name).length > 24 ? `${Array.from(name).slice(0, 23).join('')}…` : name;
 }
 
 function escapeXml(value) {
