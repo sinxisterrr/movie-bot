@@ -157,12 +157,16 @@ export class Manager {
     const timezone = this.getTimezone(interaction.guildId);
     if (!timezone) throw new Error('Run `/manager setup` once so Marvin knows your local timezone.');
     const runAt = parseScheduledTime(interaction.options.getString('when', true), timezone);
+    const recurrence = interaction.options.getString('recurring') ?? null;
     return {
       guildId: interaction.guildId,
       userId: interaction.user.id,
       channelId: interaction.options.getChannel('channel', true).id,
       timezone,
       runAt: runAt.toUTC().toISO(),
+      recurrence,
+      recurrenceAnchorDay: runAt.day,
+      recurrenceAnchorMonth: runAt.month,
       expiresAt: Date.now() + 15 * 60_000,
     };
   }
@@ -232,17 +236,20 @@ export class Manager {
 
   insertJob(draft, type, payload) {
     const result = this.db.prepare(`INSERT INTO scheduled_jobs
-      (guild_id, channel_id, creator_id, type, payload_json, role_id, run_at, status, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`).run(
+      (guild_id, channel_id, creator_id, type, payload_json, role_id, run_at, status, created_at,
+       recurrence, recurrence_timezone, recurrence_anchor_day, recurrence_anchor_month)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`).run(
       draft.guildId, draft.channelId, draft.userId, type, JSON.stringify(payload), draft.roleId,
-      draft.runAt, DateTime.utc().toISO(),
+      draft.runAt, DateTime.utc().toISO(), draft.recurrence, draft.timezone,
+      draft.recurrenceAnchorDay, draft.recurrenceAnchorMonth,
     );
     return Number(result.lastInsertRowid);
   }
 
   confirmJob(interaction, id, draft, type) {
     const timestamp = Math.floor(DateTime.fromISO(draft.runAt).toSeconds());
-    const response = { content: `📋 Scheduled ${type} **#${id}** for <#${draft.channelId}> at <t:${timestamp}:F> (<t:${timestamp}:R>).` };
+    const repeat = draft.recurrence ? ` It will repeat **${draft.recurrence}** until cancelled.` : '';
+    const response = { content: `📋 Scheduled ${type} **#${id}** for <#${draft.channelId}> at <t:${timestamp}:F> (<t:${timestamp}:R>).${repeat}` };
     return interaction.deferred ? interaction.editReply(response) : interaction.reply({ ...response, ephemeral: true });
   }
 
@@ -267,12 +274,13 @@ export class Manager {
   }
 
   list(interaction) {
-    const jobs = this.db.prepare(`SELECT id, type, channel_id, run_at, status FROM scheduled_jobs
+    const jobs = this.db.prepare(`SELECT id, type, channel_id, run_at, status, recurrence FROM scheduled_jobs
       WHERE guild_id = ? AND status IN ('pending', 'running') ORDER BY run_at LIMIT 20`).all(interaction.guildId);
     if (!jobs.length) return interaction.reply({ content: '📋 Marvin’s clipboard is empty.', ephemeral: true });
     const lines = jobs.map((job) => {
       const timestamp = Math.floor(DateTime.fromISO(job.run_at).toSeconds());
-      return `**#${job.id}** · ${job.type} · <#${job.channel_id}> · <t:${timestamp}:F> · ${job.status}`;
+      const repeat = job.recurrence ? ` · 🔁 ${job.recurrence}` : '';
+      return `**#${job.id}** · ${job.type} · <#${job.channel_id}> · <t:${timestamp}:F> · ${job.status}${repeat}`;
     });
     return interaction.reply({ content: `📋 **Upcoming work**\n${lines.join('\n')}\n\nUse \`/manager show id:<number>\` to inspect the complete scheduled content.`, ephemeral: true });
   }
@@ -293,6 +301,7 @@ export class Manager {
         { name: 'Scheduled', value: `<t:${timestamp}:F>\n<t:${timestamp}:R>`, inline: true },
       );
     if (job.role_id) embed.addFields({ name: 'Role mention', value: `<@&${job.role_id}>`, inline: true });
+    if (job.recurrence) embed.addFields({ name: 'Repeats', value: capitalize(job.recurrence), inline: true });
     if (payload.title) embed.addFields({ name: 'Title', value: payload.title });
     if (payload.tagNames?.length) embed.addFields({ name: 'Forum tags', value: payload.tagNames.join(', ') });
     if (job.type === 'poll') {
@@ -315,11 +324,12 @@ export class Manager {
 
   async cancel(interaction) {
     const id = interaction.options.getInteger('id', true);
+    const job = this.db.prepare('SELECT recurrence FROM scheduled_jobs WHERE id = ? AND guild_id = ?').get(id, interaction.guildId);
     const result = this.db.prepare(`UPDATE scheduled_jobs SET status = 'cancelled'
       WHERE id = ? AND guild_id = ? AND status = 'pending'`).run(id, interaction.guildId);
     if (!result.changes) throw new Error(`Pending job #${id} was not found.`);
     await this.cleanupFiles(id);
-    return interaction.reply({ content: `🗑️ Job **#${id}** has been removed from Marvin’s clipboard.`, ephemeral: true });
+    return interaction.reply({ content: `🗑️ Job **#${id}**${job?.recurrence ? ' and its recurring series have' : ' has'} been removed from Marvin’s clipboard.`, ephemeral: true });
   }
 
   listResponses(interaction) {
@@ -401,9 +411,15 @@ export class Manager {
           reason: `Scheduled by Marvin job #${job.id}`,
         });
       } else throw new Error(`Unknown scheduled job type: ${job.type}`);
-      this.db.prepare(`UPDATE scheduled_jobs SET status = 'completed', executed_at = ?, message_id = ?, error = NULL WHERE id = ?`)
-        .run(DateTime.utc().toISO(), message.id, job.id);
-      await this.cleanupFiles(job.id);
+      if (job.recurrence) {
+        const nextRun = nextRecurringRun(job, DateTime.utc());
+        this.db.prepare(`UPDATE scheduled_jobs SET status = 'pending', run_at = ?, executed_at = ?, message_id = ?, error = NULL WHERE id = ?`)
+          .run(nextRun.toUTC().toISO(), DateTime.utc().toISO(), message.id, job.id);
+      } else {
+        this.db.prepare(`UPDATE scheduled_jobs SET status = 'completed', executed_at = ?, message_id = ?, error = NULL WHERE id = ?`)
+          .run(DateTime.utc().toISO(), message.id, job.id);
+        await this.cleanupFiles(job.id);
+      }
     } catch (error) {
       console.error(`Scheduled job #${job.id} failed`, error);
       this.db.prepare("UPDATE scheduled_jobs SET status = 'failed', executed_at = ?, error = ? WHERE id = ?")
@@ -438,6 +454,40 @@ export function parseScheduledTime(input, timezone, now = DateTime.now().setZone
     throw new Error(`I read that as <t:${timestamp}:F>, which is in the past. Try a future date or something like \`tomorrow 9am\`.`);
   }
   return scheduled;
+}
+
+export function nextRecurringRun(job, now = DateTime.utc()) {
+  const timezone = job.recurrence_timezone;
+  if (!IANAZone.isValidZone(timezone)) throw new Error(`Recurring job #${job.id} has an invalid timezone.`);
+  if (!['daily', 'weekly', 'monthly', 'annually'].includes(job.recurrence)) {
+    throw new Error(`Recurring job #${job.id} has an invalid recurrence.`);
+  }
+  let candidate = DateTime.fromISO(job.run_at, { zone: 'utc' }).setZone(timezone);
+  const localNow = now.setZone(timezone);
+  const anchorDay = job.recurrence_anchor_day ?? candidate.day;
+  const anchorMonth = job.recurrence_anchor_month ?? candidate.month;
+  let advances = 0;
+  while (candidate <= localNow) {
+    if (job.recurrence === 'daily') candidate = candidate.plus({ days: 1 });
+    else if (job.recurrence === 'weekly') candidate = candidate.plus({ weeks: 1 });
+    else if (job.recurrence === 'monthly') {
+      const nextMonth = candidate.startOf('month').plus({ months: 1 });
+      candidate = nextMonth.set({
+        day: Math.min(anchorDay, nextMonth.daysInMonth),
+        hour: candidate.hour, minute: candidate.minute, second: candidate.second, millisecond: candidate.millisecond,
+      });
+    } else {
+      const nextYear = candidate.year + 1;
+      const monthStart = DateTime.fromObject({ year: nextYear, month: anchorMonth, day: 1 }, { zone: timezone });
+      candidate = monthStart.set({
+        day: Math.min(anchorDay, monthStart.daysInMonth),
+        hour: candidate.hour, minute: candidate.minute, second: candidate.second, millisecond: candidate.millisecond,
+      });
+    }
+    advances += 1;
+    if (advances > 100_000) throw new Error(`Recurring job #${job.id} could not calculate its next run.`);
+  }
+  return candidate;
 }
 
 export function parsePollAnswers(input) {
@@ -492,4 +542,8 @@ function formatBytes(bytes) {
 
 function truncate(text, length) {
   return text.length > length ? `${text.slice(0, length - 1)}…` : text;
+}
+
+function capitalize(text) {
+  return `${text[0].toUpperCase()}${text.slice(1)}`;
 }

@@ -53,9 +53,9 @@ For development, `DISCORD_GUILD_ID` registers commands immediately in that serve
 - `/movie-admin setup` — configure or update the automatic schedule.
 - `/movie-admin pause` and `/movie-admin resume` — emergency controls.
 - `/manager setup timezone` — set the local timezone used by friendly dates such as `Nov 6 2026 9am`.
-- `/manager announce channel when role?` — open a multiline editor and schedule the exact Markdown body.
-- `/manager poll channel when duration multiple? role?` — schedule a native poll with 2–10 answers.
-- `/manager forum channel when role? attachment-1? attachment-2? attachment-3? attachment-4?` — schedule a forum post with a title, exact Markdown, existing tags, and persistent attachments.
+- `/manager announce channel when recurring? role?` — open a multiline editor and schedule the exact Markdown body.
+- `/manager poll channel when duration recurring? multiple? role?` — schedule a native poll with 2–10 answers.
+- `/manager forum channel when recurring? role? attachment-1? attachment-2? attachment-3? attachment-4?` — schedule a forum post with a title, exact Markdown, existing tags, and persistent attachments.
 - `/manager list`, `/manager show id`, and `/manager cancel id` — list, privately preview, or cancel pending work.
 - `/manager response-add kind`, `/manager response-list kind?`, and `/manager response-remove id` — manage custom `/pet` and `/treat` responses.
 
@@ -69,7 +69,9 @@ For decorated polls, enter one answer per line. Put an emoji before a pipe when 
 
 Announcements are stored and posted character-for-character, including line breaks and Discord Markdown. An optional selected role is added as a separate first-line mention. Discord's 2,000-character message limit still applies.
 
-Forum scheduling opens a modal for the post title, comma-separated existing tag names, and exact opening-post Markdown. Selected attachments are copied immediately into `manager-attachments` beside the SQLite database, survive redeployments through the same persistent volume, and are deleted after a successful post or cancellation. The first image becomes Discord's forum/gallery cover. Each scheduled attachment is limited to 20 MB.
+Announcements, polls, and forum posts can optionally repeat daily, weekly, monthly, or annually. Recurrence follows the configured managerial timezone and preserves the intended local clock time. Monthly and annual schedules use the last valid day when their anchor date does not exist (for example, January 31 becomes February 28 or 29, then returns to March 31). `/manager list` and `/manager show` identify recurring work; `/manager cancel` ends the entire series. After downtime, Marvin posts a due recurring job once and advances it to the next future occurrence rather than flooding every missed interval.
+
+Forum scheduling opens a modal for the post title, comma-separated existing tag names, and exact opening-post Markdown. Selected attachments are copied immediately into `manager-attachments` beside the SQLite database and survive redeployments through the same persistent volume. One-off attachments are deleted after a successful post; recurring attachments remain until the series is cancelled. The first image becomes Discord's forum/gallery cover. Each scheduled attachment is limited to 20 MB.
 
 Administrative commands require Discord's **Manage Server** permission. The same authorization is checked again when the command is handled.
 

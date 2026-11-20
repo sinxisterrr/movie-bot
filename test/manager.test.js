@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DateTime } from 'luxon';
 import { ChannelType } from 'discord.js';
-import { parsePollAnswers, parseScheduledTime, resolveForumTags } from '../src/manager.js';
+import { nextRecurringRun, parsePollAnswers, parseScheduledTime, resolveForumTags } from '../src/manager.js';
 import { openDatabase } from '../src/database.js';
 import { Manager } from '../src/manager.js';
 
@@ -47,6 +47,29 @@ test('interprets relative dates from the configured timezone, not the host timez
   assert.equal(scheduled.toISO(), '2026-11-06T09:00:00.000-06:00');
 });
 
+test('calculates recurring calendar dates in the configured local timezone', () => {
+  const base = {
+    id: 9,
+    run_at: '2027-01-31T15:00:00.000Z',
+    recurrence_timezone: 'America/Regina',
+    recurrence_anchor_day: 31,
+    recurrence_anchor_month: 1,
+  };
+  const monthly = nextRecurringRun({ ...base, recurrence: 'monthly' }, DateTime.fromISO('2027-02-01T00:00:00Z'));
+  assert.equal(monthly.toISO(), '2027-02-28T09:00:00.000-06:00');
+  const march = nextRecurringRun({ ...base, recurrence: 'monthly' }, DateTime.fromISO('2027-03-01T00:00:00Z'));
+  assert.equal(march.toISO(), '2027-03-31T09:00:00.000-06:00');
+
+  const leap = nextRecurringRun({
+    ...base,
+    run_at: '2028-02-29T15:00:00.000Z',
+    recurrence: 'annually',
+    recurrence_anchor_day: 29,
+    recurrence_anchor_month: 2,
+  }, DateTime.fromISO('2028-03-01T00:00:00Z'));
+  assert.equal(leap.toISO(), '2029-02-28T09:00:00.000-06:00');
+});
+
 test('parses decorated poll answers including custom emoji', () => {
   assert.deepEqual(parsePollAnswers('🍄 | Mushrooms\n<:marvin:123456789> | Marvin decides'), [
     { text: 'Mushrooms', emoji: { name: '🍄' } },
@@ -83,6 +106,27 @@ test('executes an announcement with exact Markdown and only the selected role me
   db.close();
 });
 
+test('reschedules a recurring announcement instead of completing it', async () => {
+  const db = openDatabase(':memory:');
+  let sends = 0;
+  const channel = { isTextBased: () => true, send: async () => { sends += 1; return { id: 'message-repeat' }; } };
+  const manager = new Manager({ channels: { fetch: async () => channel } }, db);
+  db.prepare(`INSERT INTO scheduled_jobs
+    (guild_id, channel_id, creator_id, type, payload_json, run_at, status, created_at,
+     recurrence, recurrence_timezone, recurrence_anchor_day, recurrence_anchor_month)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`).run(
+    'guild', 'channel', 'admin', 'announcement', JSON.stringify({ body: 'It is Friday, bureaucratically.' }),
+    '2026-11-20T15:00:00.000Z', '2026-11-01T00:00:00.000Z', 'weekly', 'America/Regina', 20, 11,
+  );
+  await manager.tick();
+  const job = db.prepare('SELECT status, recurrence, run_at FROM scheduled_jobs').get();
+  assert.equal(sends, 1);
+  assert.equal(job.status, 'pending');
+  assert.equal(job.recurrence, 'weekly');
+  assert.ok(DateTime.fromISO(job.run_at) > DateTime.utc());
+  db.close();
+});
+
 test('creates a tagged forum post with its cached attachment and cleans the cache', async () => {
   const db = openDatabase(':memory:');
   const root = await mkdtemp(join(tmpdir(), 'marvin-manager-'));
@@ -114,5 +158,35 @@ test('creates a tagged forum post with its cached attachment and cleans the cach
   assert.equal(created.message.files[0].name, 'cover.png');
   assert.equal(db.prepare('SELECT status FROM scheduled_jobs').get().status, 'completed');
   assert.equal(db.prepare('SELECT COUNT(*) AS count FROM scheduled_job_files').get().count, 0);
+  db.close();
+});
+
+test('keeps cached attachments for recurring forum posts', async () => {
+  const db = openDatabase(':memory:');
+  const root = await mkdtemp(join(tmpdir(), 'marvin-recurring-forum-'));
+  const jobDirectory = join(root, '1');
+  await mkdir(jobDirectory, { recursive: true });
+  const storagePath = join(jobDirectory, '1-cover.png');
+  await writeFile(storagePath, Buffer.from('reusable image'));
+  const channel = {
+    type: ChannelType.GuildForum,
+    threads: { create: async () => ({ id: 'thread-repeat' }) },
+  };
+  const manager = new Manager({ channels: { fetch: async () => channel } }, db);
+  manager.filesRoot = root;
+  const job = db.prepare(`INSERT INTO scheduled_jobs
+    (guild_id, channel_id, creator_id, type, payload_json, run_at, status, created_at,
+     recurrence, recurrence_timezone, recurrence_anchor_day, recurrence_anchor_month)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)`).run(
+    'guild', 'forum', 'admin', 'forum', JSON.stringify({
+      title: 'Every Friday', body: '# Flat Fuck Friday', tagIds: [], tagNames: [], attachmentNames: ['cover.png'],
+    }), '2026-11-20T15:00:00.000Z', '2026-11-01T00:00:00.000Z', 'weekly', 'America/Regina', 20, 11,
+  );
+  db.prepare(`INSERT INTO scheduled_job_files
+    (job_id, filename, storage_path, content_type, size, description)
+    VALUES (?, ?, ?, ?, ?, ?)`).run(job.lastInsertRowid, 'cover.png', storagePath, 'image/png', 14, 'Cover');
+  await manager.tick();
+  assert.equal(db.prepare('SELECT status FROM scheduled_jobs').get().status, 'pending');
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM scheduled_job_files').get().count, 1);
   db.close();
 });

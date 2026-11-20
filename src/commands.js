@@ -58,6 +58,7 @@ export const commands = [
     .addSubcommand((s) => s.setName('announce').setDescription('Schedule an exact Markdown announcement')
       .addChannelOption((o) => o.setName('channel').setDescription('Channel to post in').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(true))
       .addStringOption((o) => o.setName('when').setDescription('Your local time, e.g. Nov 6 2026 9am').setRequired(true))
+      .addStringOption(recurrenceOption)
       .addRoleOption((o) => o.setName('role').setDescription('Optional role to ping')))
     .addSubcommand((s) => s.setName('poll').setDescription('Schedule a native Discord poll')
       .addChannelOption((o) => o.setName('channel').setDescription('Channel to post in').addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement).setRequired(true))
@@ -67,11 +68,13 @@ export const commands = [
           { name: '1 hour', value: 1 }, { name: '4 hours', value: 4 }, { name: '8 hours', value: 8 },
           { name: '24 hours', value: 24 }, { name: '3 days', value: 72 }, { name: '1 week', value: 168 },
         ))
+      .addStringOption(recurrenceOption)
       .addBooleanOption((o) => o.setName('multiple').setDescription('Allow people to choose multiple answers'))
       .addRoleOption((o) => o.setName('role').setDescription('Optional role to ping')))
     .addSubcommand((s) => s.setName('forum').setDescription('Schedule a forum post with tags and attachments')
       .addChannelOption((o) => o.setName('channel').setDescription('Forum channel to post in').addChannelTypes(ChannelType.GuildForum, ChannelType.GuildMedia).setRequired(true))
       .addStringOption((o) => o.setName('when').setDescription('Your local time, e.g. Nov 23 2026 9am').setRequired(true))
+      .addStringOption(recurrenceOption)
       .addRoleOption((o) => o.setName('role').setDescription('Optional role to ping in the opening post'))
       .addAttachmentOption((o) => o.setName('attachment-1').setDescription('Cover image or first attachment'))
       .addAttachmentOption((o) => o.setName('attachment-2').setDescription('Optional second attachment'))
@@ -91,3 +94,13 @@ export const commands = [
     .addSubcommand((s) => s.setName('response-remove').setDescription('Remove a custom Marvin /pet response')
       .addIntegerOption((o) => o.setName('id').setDescription('Response ID from /manager response-list').setRequired(true).setMinValue(1))),
 ].map((command) => command.toJSON());
+
+function recurrenceOption(option) {
+  return option.setName('recurring').setDescription('Optional repeating schedule')
+    .addChoices(
+      { name: 'Daily', value: 'daily' },
+      { name: 'Weekly', value: 'weekly' },
+      { name: 'Monthly', value: 'monthly' },
+      { name: 'Annually', value: 'annually' },
+    );
+}

@@ -80,6 +80,11 @@ export function openDatabase(filename) {
   if (!responseColumns.includes('kind')) {
     db.exec("ALTER TABLE marvin_responses ADD COLUMN kind TEXT NOT NULL DEFAULT 'pet'");
   }
+  const jobColumns = db.prepare('PRAGMA table_info(scheduled_jobs)').all().map((column) => column.name);
+  if (!jobColumns.includes('recurrence')) db.exec('ALTER TABLE scheduled_jobs ADD COLUMN recurrence TEXT');
+  if (!jobColumns.includes('recurrence_timezone')) db.exec('ALTER TABLE scheduled_jobs ADD COLUMN recurrence_timezone TEXT');
+  if (!jobColumns.includes('recurrence_anchor_day')) db.exec('ALTER TABLE scheduled_jobs ADD COLUMN recurrence_anchor_day INTEGER');
+  if (!jobColumns.includes('recurrence_anchor_month')) db.exec('ALTER TABLE scheduled_jobs ADD COLUMN recurrence_anchor_month INTEGER');
   migrateMultipleNominations(db);
   return db;
 }
